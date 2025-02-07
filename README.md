@@ -6,7 +6,7 @@
 
 💞️ I’m looking to collaborate on innovative AI projects, open-source contributions, and any exciting ventures that involve music production, particularly in the rock genre. I'm always open to new ideas and collaborations that push the boundaries of technology and creativity.
 
-📫 How to reach me: You can connect with me on GitHub, or feel free to drop me an email at mrbooomber@example.com. I'm also active on LinkedIn and Twitter, where I share updates about my latest projects and interests.
+📫 How to reach me: You can connect with me on GitHub, or feel free to drop me an email at mrbooomber@gmail.com. I'm also active on LinkedIn and Twitter, where I share updates about my latest projects and interests.
 
 😄 Pronouns: He/Him
 
