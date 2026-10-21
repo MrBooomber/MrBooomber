@@ -1,4 +1,4 @@
-/* NewDeaf for Lampa v1.0.0 | ES5 | MIT */
+/* NewDeaf for Lampa v1.1.0 | ES5 | MIT */
 (function () {
     'use strict';
     if (window.NewDeafPlugin) return;
@@ -77,9 +77,12 @@
         return result;
     }
     function menu(title, items, onSelect, back) {
+        // Select hides itself before onSelect and closes itself before onBack.
+        // Unlike Modal.close(), Select.close() calls onBack in Lampa 3.3.8.
+        // Calling it from either callback triggers a second navigation or recursion.
         L.Select.show({ title: title, items: items, onSelect: function (item) {
-            L.Select.close(); onSelect(item);
-        }, onBack: function () { L.Select.close(); if (back) back(); else L.Controller.toggle('menu'); } });
+            onSelect(item);
+        }, onBack: function () { if (back) back(); else L.Controller.toggle('menu'); } });
     }
     function request(url, done, back) {
         var id = ++generation;
@@ -155,6 +158,58 @@
         catalog(base() + '/index.php?do=search&subaction=search&search_start=1&full_search=0&story=' + encodeURIComponent(q),
             'Пошук ' + escape(q), 1, home);
     }
+    function launchSource(movie) {
+        var titles = [movie.original_title, movie.original_name, movie.title, movie.name];
+        var queries = [], seen = {};
+        titles.forEach(function (title) {
+            var q = String(title || '').trim().slice(0, 80);
+            if (q.length >= 3 && !seen[q]) { seen[q] = true; queries.push(q); }
+        });
+        function back() { L.Controller.toggle('content'); }
+        if (!queries.length) { L.Noty.show('У картці немає назви для пошуку NewDeaf'); back(); return; }
+        function find(index) {
+            var query = queries[index];
+            var url = base() + '/index.php?do=search&subaction=search&search_start=1&full_search=1&story=' + encodeURIComponent(query);
+            request(url, function (html) {
+                var cards = parseCatalog(html, base()).cards;
+                if (!cards.length && index + 1 < queries.length) { find(index + 1); return; }
+                if (!cards.length) { L.Noty.show('NewDeaf: фільм або серіал не знайдено'); back(); return; }
+                var year = String(movie.release_date || movie.first_air_date || '').slice(0, 4);
+                if (year) cards.sort(function (a, b) {
+                    return (b.title.indexOf(year) !== -1 ? 1 : 0) - (a.title.indexOf(year) !== -1 ? 1 : 0);
+                });
+                var items = cards.map(function (card) {
+                    return { title: escape(card.title), subtitle: escape(card.description.slice(0, 180)), card: card };
+                });
+                if (index + 1 < queries.length) {
+                    items.push({ title: 'Пошук за іншою назвою', subtitle: escape(queries[index + 1]), another: true });
+                }
+                menu('NewDeaf · ' + escape(movie.title || movie.name || query), items, function (item) {
+                    if (item.another) find(index + 1);
+                    else details(item.card, function () { find(index); });
+                }, back);
+            }, back);
+        }
+        find(0);
+    }
+    function attachSource(event) {
+        if (event.type !== 'complite') return;
+        var root = event.body;
+        if (!root && event.object && event.object.activity) root = event.object.activity.render();
+        if (!root || typeof root.find !== 'function') return;
+        var movie = event.data && event.data.movie;
+        if (!movie && event.props && event.props.get) movie = event.props.get('movie');
+        if (!movie) return;
+        // Lampa 3.3.8 builds Watch -> Source from children of this container.
+        var target = root.find('.buttons--container').eq(0);
+        if (!target.length || root.find('.view--newdeaf').length) return;
+        var button = $('<div class="full-start__button selector view--newdeaf">' +
+            '<svg viewBox="0 0 24 24" width="24" height="24"><rect x="2" y="4" width="20" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>' +
+            '<path d="M10 9L16 12L10 15Z" fill="currentColor"/></svg><span>NewDeaf</span></div>');
+        button.data('subtitle', 'Фільми та серіали із субтитрами');
+        button.on('hover:enter', function () { launchSource(movie); });
+        target.append(button);
+    }
     function home() {
         menu('NewDeaf · каталог із субтитрами', [
             { title: 'Новинки', path: '/' }, { title: 'Фільми', path: '/film/' },
@@ -180,11 +235,12 @@
         L.SettingsApi.addParam({ component: 'newdeaf',
             param: { name: 'newdeaf_base', type: 'input', placeholder: DEFAULT_BASE, default: DEFAULT_BASE },
             field: { name: 'Домен NewDeaf', description: 'HTTPS адреса newdeaf.co або його піддомену без кінцевого слеша' } });
-        L.Manifest.plugins = { type: 'video', version: '1.0.0', name: 'NewDeaf', description: 'Каталог NewDeaf із субтитрами',
+        L.Listener.follow('full', attachSource);
+        L.Manifest.plugins = { type: 'video', version: '1.1.0', name: 'NewDeaf', description: 'Каталог NewDeaf із субтитрами',
             onContextMenu: function () { return { name: 'Знайти в NewDeaf', description: 'Пошук за назвою' }; },
-            onContextLauch: function (card) { search(card.title || card.name || card.original_title || card.original_name); } };
+            onContextLauch: launchSource };
     }
-    window.NewDeafPlugin = { version: '1.0.0', open: home, parseCatalog: parseCatalog, parsePlayers: parsePlayers };
+    window.NewDeafPlugin = { version: '1.1.0', open: home, parseCatalog: parseCatalog, parsePlayers: parsePlayers };
     if (window.appready) init();
     else L.Listener.follow('app', function (event) { if (event.type === 'ready') init(); });
 }());

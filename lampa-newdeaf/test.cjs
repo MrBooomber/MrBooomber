@@ -1,15 +1,30 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-let listener, menus = 0, components = 0, params = 0, select, modal;
+let listener, fullListener, menus = 0, components = 0, params = 0, select, modal, controller;
 const pending = [];
-function element() { return { on() { return this; }, eq() { return this; }, attr() { return this; }, append() { menus++; return this; } }; }
+let selectCloseDepth = 0;
+function closeSelect() {
+    // Lampa 3.3.8 Select.close() calls onBack even after selection hid the UI.
+    // This is deliberately different from Modal.close(), which does not.
+    if (++selectCloseDepth > 30) throw new RangeError('Maximum call stack size exceeded: recursive Select.close/onBack');
+    try { const closed = select; if (closed && closed.onBack) closed.onBack(); }
+    finally { selectCloseDepth--; }
+}
+function element() {
+    return { events: {}, values: {}, length: 1,
+        on(name, callback) { this.events[name] = callback; return this; },
+        eq() { return this; }, attr() { return this; },
+        data(key, value) { if (arguments.length === 1) return this.values[key]; this.values[key] = value; return this; },
+        append() { menus++; return this; }
+    };
+}
 const Lampa = {
     Reguest: function () { this.timeout = () => {}; this.clear = () => {}; this.native = (url, done, fail) => pending.push({ url, done, fail }); },
-    Listener: { follow(name, cb) { listener = cb; } },
+    Listener: { follow(name, cb) { if (name === 'app') listener = cb; else if (name === 'full') fullListener = cb; } },
     SettingsApi: { addComponent() { components++; }, addParam() { params++; } },
     Manifest: {}, Storage: { get(k, d) { return d; } },
-    Select: { show(s) { select = s; }, close() {} }, Controller: { toggle() {} },
+    Select: { show(s) { select = s; }, close: closeSelect }, Controller: { toggle(name) { controller = name; } },
     Modal: { open(s) { modal = s; }, close() { modal = null; } }, Noty: { show() {} }
 };
 const ctx = { window: { Lampa, appready: false }, $: element };
@@ -47,11 +62,42 @@ const detailHTML = '<iframe class="newdeaf-video" src="https://api.nextembed.ws/
 pending.at(-1).done(detailHTML);
 select.onSelect(select.items[0]); assert.equal(modal.size, 'full');
 modal.onBack(); pending.at(-1).done(detailHTML); assert.ok(select.items[0].player);
+// Back from source list returns to category; Back from category returns home.
+Lampa.Select.close(); pending.at(-1).done(html);
+assert.equal(select.items[0].card.title, 'A & B (2020)');
+Lampa.Select.close(); assert.equal(select.items.length, 6);
+// Back from the top-level menu restores the Lampa menu without recursive close.
+Lampa.Select.close(); assert.equal(selectCloseDepth, 0);
 // Cancelled responses must not reopen a modal or replace the restored menu.
 api.open(); select.onSelect(select.items[0]); const cancelled = pending.at(-1);
 modal.onBack(); const restored = select;
 cancelled.done(html); assert.equal(select, restored); assert.equal(modal, null);
-console.log('PASS: readiness, duplicate loading, menu, settings, manifest, catalog parsing, HTML entities, deduplication, URL restrictions, iframe filtering, empty results, category/card/player/back flow, cancelled responses.');
+// Full-card integration: inject a standard button into Lampa's grouped Source container.
+let sourceButton, sourceCount = 0;
+const sourceRoot = { find(selector) {
+    if (selector === '.buttons--container') return { eq() { return this; }, length: 1,
+        append(button) { sourceButton = button; sourceCount++; } };
+    if (selector === '.view--newdeaf') return { length: sourceCount };
+    throw new Error('Unexpected source selector: ' + selector);
+} };
+const movie = { title: 'Локалізована назва', original_title: 'Original title', release_date: '2020-01-01' };
+fullListener({ type: 'build', body: sourceRoot, data: { movie } }); assert.equal(sourceCount, 0);
+fullListener({ type: 'complite', body: sourceRoot, data: { movie } });
+fullListener({ type: 'complite', body: sourceRoot, data: { movie } });
+assert.equal(sourceCount, 1); assert.equal(sourceButton.data('subtitle'), 'Фільми та серіали із субтитрами');
+sourceButton.events['hover:enter']();
+assert.ok(pending.at(-1).url.endsWith('story=Original%20title'));
+pending.at(-1).done('No results');
+assert.ok(pending.at(-1).url.endsWith('story=' + encodeURIComponent(movie.title)));
+pending.at(-1).done(html); assert.ok(select.items[0].card);
+select.onSelect(select.items[0]); pending.at(-1).done(detailHTML);
+assert.ok(select.items[0].player); select.onSelect(select.items[0]); assert.equal(modal.size, 'full');
+modal.onBack(); pending.at(-1).done(detailHTML);
+Lampa.Select.close(); pending.at(-1).done(html);
+Lampa.Select.close(); assert.equal(controller, 'content');
+sourceButton.events['hover:enter'](); pending.at(-1).done('No results'); pending.at(-1).done('No results');
+assert.equal(controller, 'content'); assert.equal(modal, null);
+console.log('PASS: parsers, init, menus, Select.close regression, category/card/player/back, cancellation, Watch source injection, deduplication, title fallback, source/player/back to movie, not-found handling.');
 if (process.argv.includes('--stdin')) {
     const live = JSON.parse(fs.readFileSync(0, 'utf8').replace(/^\uFEFF/, ''));
     const catalog = api.parseCatalog(live.catalog, 'https://21oct.newdeaf.co');
