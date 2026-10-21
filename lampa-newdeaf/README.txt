@@ -1,4 +1,9 @@
-NewDeaf для Lampa — версія 1.1.0
+NewDeaf для Lampa — версія 1.1.1
+
+Виправлення 1.1.1
+Екран завантаження передає jQuery-елемент у Modal.open замість рядка HTML.
+Усунуто помилку «where.find is not a function» у Lampa 3.3.8.
+У тестах перевіряється контракт вмісту обох модальних вікон.
 
 Нове у 1.1.0
 NewDeaf додано в «Дивитись → Джерело» у картці фільму або серіалу.
@@ -27,7 +32,7 @@ test.cjs — локальні перевірки реєстрації, парс�
 
 Встановлення
 1. Адреса встановлення через CDN публічного GitHub репозиторію:
-   https://cdn.jsdelivr.net/gh/MrBooomber/MrBooomber@main/lampa-newdeaf/newdeaf-v1.1.0.js
+   https://cdn.jsdelivr.net/gh/MrBooomber/MrBooomber@main/lampa-newdeaf/newdeaf-v1.1.1.js
 2. Вихідний код:
    https://github.com/MrBooomber/MrBooomber/tree/main/lampa-newdeaf
 3. У Lampa відкрийте Налаштування → Розширення → Додати плагін.

@@ -1,4 +1,4 @@
-/* NewDeaf for Lampa v1.1.0 | ES5 | MIT */
+/* NewDeaf for Lampa v1.1.1 | ES5 | MIT */
 (function () {
     'use strict';
     if (window.NewDeafPlugin) return;
@@ -87,7 +87,7 @@
     function request(url, done, back) {
         var id = ++generation;
         network.clear();
-        L.Modal.open({ title: 'NewDeaf', html: '<div style="padding:1em">Завантаження…</div>', size: 'small',
+        L.Modal.open({ title: 'NewDeaf', html: $('<div style="padding:1em">Завантаження…</div>'), size: 'small',
             onBack: function () { ++generation; network.clear(); L.Modal.close(); back(); } });
         network.native(url, function (raw) {
             if (id !== generation) return;
@@ -236,11 +236,11 @@
             param: { name: 'newdeaf_base', type: 'input', placeholder: DEFAULT_BASE, default: DEFAULT_BASE },
             field: { name: 'Домен NewDeaf', description: 'HTTPS адреса newdeaf.co або його піддомену без кінцевого слеша' } });
         L.Listener.follow('full', attachSource);
-        L.Manifest.plugins = { type: 'video', version: '1.1.0', name: 'NewDeaf', description: 'Каталог NewDeaf із субтитрами',
+        L.Manifest.plugins = { type: 'video', version: '1.1.1', name: 'NewDeaf', description: 'Каталог NewDeaf із субтитрами',
             onContextMenu: function () { return { name: 'Знайти в NewDeaf', description: 'Пошук за назвою' }; },
             onContextLauch: launchSource };
     }
-    window.NewDeafPlugin = { version: '1.1.0', open: home, parseCatalog: parseCatalog, parsePlayers: parsePlayers };
+    window.NewDeafPlugin = { version: '1.1.1', open: home, parseCatalog: parseCatalog, parsePlayers: parsePlayers };
     if (window.appready) init();
     else L.Listener.follow('app', function (event) { if (event.type === 'ready') init(); });
 }());

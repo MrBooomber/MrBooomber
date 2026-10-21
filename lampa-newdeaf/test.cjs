@@ -4,6 +4,19 @@ const assert = require('node:assert/strict');
 let listener, fullListener, menus = 0, components = 0, params = 0, select, modal, controller;
 const pending = [];
 let selectCloseDepth = 0;
+let coreModalBind;
+const coreFlag = process.argv.find(arg => arg.startsWith('--core='));
+if (coreFlag) {
+    // Run the installed core's real binder; do not modify the application.
+    const core = fs.readFileSync(coreFlag.slice(7), 'utf8');
+    const start = core.indexOf('  function bind$1(where)', core.indexOf('  function open$5(params)'));
+    const end = core.indexOf('\n  function jump(', start);
+    assert.ok(start >= 0 && end > start, 'Installed Lampa Modal binder not found');
+    const coreContext = vm.createContext({ active$4: {}, _scroll: { update() {} }, $: x => x });
+    vm.runInContext(core.slice(start, end) + '\nthis.validate = bind$1;', coreContext);
+    coreModalBind = coreContext.validate;
+    assert.throws(() => coreModalBind('<div>loading</div>'), /where.find is not a function/);
+}
 function closeSelect() {
     // Lampa 3.3.8 Select.close() calls onBack even after selection hid the UI.
     // This is deliberately different from Modal.close(), which does not.
@@ -15,6 +28,7 @@ function element() {
     return { events: {}, values: {}, length: 1,
         on(name, callback) { this.events[name] = callback; return this; },
         eq() { return this; }, attr() { return this; },
+        find() { return this; },
         data(key, value) { if (arguments.length === 1) return this.values[key]; this.values[key] = value; return this; },
         append() { menus++; return this; }
     };
@@ -25,7 +39,12 @@ const Lampa = {
     SettingsApi: { addComponent() { components++; }, addParam() { params++; } },
     Manifest: {}, Storage: { get(k, d) { return d; } },
     Select: { show(s) { select = s; }, close: closeSelect }, Controller: { toggle(name) { controller = name; } },
-    Modal: { open(s) { modal = s; }, close() { modal = null; } }, Noty: { show() {} }
+    Modal: { open(s) {
+        assert.equal(typeof s.html.find, 'function', 'Lampa 3.3.8 Modal.html must be a jQuery element');
+        if (coreModalBind) coreModalBind(s.html);
+        s.html.find('.selector').on('hover:focus', () => {}).on('hover:enter', () => {});
+        modal = s;
+    }, close() { modal = null; } }, Noty: { show() {} }
 };
 const ctx = { window: { Lampa, appready: false }, $: element };
 const source = fs.readFileSync(__dirname + '/newdeaf.js', 'utf8');
@@ -98,6 +117,7 @@ Lampa.Select.close(); assert.equal(controller, 'content');
 sourceButton.events['hover:enter'](); pending.at(-1).done('No results'); pending.at(-1).done('No results');
 assert.equal(controller, 'content'); assert.equal(modal, null);
 console.log('PASS: parsers, init, menus, Select.close regression, category/card/player/back, cancellation, Watch source injection, deduplication, title fallback, source/player/back to movie, not-found handling.');
+if (coreModalBind) console.log('CORE PASS: loading and player modal contents pass the installed Lampa Modal.bind; original string input reproduces where.find error.');
 if (process.argv.includes('--stdin')) {
     const live = JSON.parse(fs.readFileSync(0, 'utf8').replace(/^\uFEFF/, ''));
     const catalog = api.parseCatalog(live.catalog, 'https://21oct.newdeaf.co');
